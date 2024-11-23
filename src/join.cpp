@@ -4,110 +4,87 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
+#include <string_view>
 
 namespace join {
 
-void JoinExecutor::passRow(std::vector<std::string> &&row) {
-  currentRow_ = std::move(row);
+void printRows(const std::vector<std::string> &leftRow,
+               const std::vector<std::string> &rightRow) {
+  for (const auto &cell : leftRow) {
+    std::cout << cell << ",";
+  }
+  for (std::size_t i = 0; i < rightRow.size() - 1; ++i) {
+    std::cout << rightRow[i] << ",";
+  }
+  std::cout << rightRow[rightRow.size() - 1] << "\n";
 }
 
-bool JoinExecutor::predicate(const std::vector<std::string> &row) const {
-  return currentRow_[args_.leftFieldIdx] == row[args_.rigthFieldIdx];
+void printLeftRow(const std::vector<std::string> &leftRow,
+                  std::size_t rightRowColumnsCount) {
+  printRows(leftRow, std::vector<std::string>(rightRowColumnsCount, ""));
 }
 
-void JoinExecutor::matchRow(const std::vector<std::string> &row) {
-  bool joinPredicate = predicate(row);
-  matchedRows_.push_back(std::move(row));
+void printRightRow(const std::vector<std::string> &rightRow,
+                   std::size_t leftRowColumnsCount) {
+
+  printRows(std::vector<std::string>(leftRowColumnsCount, ""), rightRow);
 }
 
-void JoinExecutor::joinRows(const std::vector<std::string> &leftLine,
-                            const std::vector<std::string> &rightLine) const {
-  if (leftLine[args_.leftFieldIdx] == rightLine[args_.rigthFieldIdx]) {
-    if (args_.kind == JoinKind::Outer) {
-      return;
+std::vector<std::vector<std::string>> readFile(std::string_view filename) {
+  std::ifstream file(filename);
+  std::vector<std::vector<std::string>> result;
+  std::string line;
+  while (std::getline(file, line)) {
+    std::stringstream ss(line);
+    std::string cell;
+    std::vector<std::string> row;
+    while (std::getline(ss, cell, ',')) {
+      row.push_back(cell);
     }
-
-    for (std::size_t i = 0; i < leftLine.size(); ++i) {
-      std::cout << leftLine[i] << ",";
-    }
-    for (std::size_t i = 0; i < rightLine.size() - 1; ++i) {
-      std::cout << rightLine[i] << ",";
-    }
-    std::cout << rightLine[rightLine.size() - 1] << "\n";
+    result.push_back(row);
   }
-
-  // rows not equal
-
-  if (args_.kind == JoinKind::Inner) {
-    return;
-  }
-
-  if (args_.kind == JoinKind::Left) {
-    std::vector<std::string> result(leftLine);
-    for (std::size_t i = 0; i < leftLine.size(); ++i) {
-      std::cout << leftLine[i] << ",";
-    }
-    for (std::size_t i = 0; i < rightLine.size() - 1; ++i) {
-      std::cout << ",";
-    }
-    std::cout << "\n";
-    return;
-  }
-
-  if (args_.kind == JoinKind::Right) {
-    std::vector<std::string> result;
-    result.reserve(leftLine.size() + rightLine.size());
-    for (std::size_t i = 0; i < leftLine.size(); ++i) {
-      result.push_back("");
-    }
-    result.insert(result.end(), rightLine.begin(), rightLine.end());
-    return result;
-  }
-
-  if (args_.kind == JoinKind::Outer) {
-    std::vector<std::string> result;
-    result.reserve(leftLine.size() + rightLine.size());
-    result.insert(result.end(), leftLine.begin(), leftLine.end());
-    result.insert(result.end(), rightLine.begin(), rightLine.end());
-    return result;
-  }
-
-  throw std::runtime_error("Unknown join kind");
+  return result;
 }
 
-NestedLoopExecutor::NestedLoopExecutor(const Args &args)
-    : JoinExecutor(args), leftFile_(std::ifstream(args.leftFilename)) {}
+bool JoinExecutor::predicate(const std::vector<std::string> &leftRow,
+                             const std::vector<std::string> &rightRow) const {
+  return leftRow[args_.leftFieldIdx] == rightRow[args_.rigthFieldIdx];
+}
 
-// scan first file
-// for each line, scan second file
-// check join condition and print if match
+NestedLoopExecutor::NestedLoopExecutor(const Args &args) : JoinExecutor(args) {}
+
 void NestedLoopExecutor::execute() {
-  std::string leftLine;
-  while (std::getline(leftFile_, leftLine)) {
-    std::stringstream leftRowStream(leftLine);
-    std::string leftRowValue;
-    std::vector<std::string> leftRowValues;
-    while (std::getline(leftRowStream, leftRowValue, ',')) {
-      leftRowValues.push_back(leftRowValue);
-    }
+  // NRVO here, so it won't cause large copying
+  auto leftTable = readFile(args_.leftFilename);
+  auto rightTable = readFile(args_.rightFilename);
 
-    std::ifstream rightFile_(args_.rightFilename);
-
-    std::string rightLine;
-    while (std::getline(rightFile_, rightLine)) {
-      std::stringstream rightRowStream(rightLine);
-      std::string rightRowValue;
-      std::vector<std::string> rightRowValues;
-      while (std::getline(rightRowStream, rightRowValue, ',')) {
-        rightRowValues.push_back(rightRowValue);
+  for (const auto &leftRow : leftTable) {
+    bool matched = false;
+    for (const auto &rightRow : rightTable) {
+      if (predicate(leftRow, rightRow)) {
+        matched = true;
+        printRows(leftRow, rightRow);
       }
+    }
+    if (!matched) {
+      if (args_.kind == JoinKind::Left || args_.kind == JoinKind::Outer) {
+        printLeftRow(leftRow, rightTable[0].size());
+      }
+    }
+  }
 
-      auto joinedRow = joinRows(leftRowValues, rightRowValues);
-      if (joinedRow.empty()) {
+  for (const auto &rightRow : rightTable) {
+    bool matched = false;
+    for (const auto &leftRow : leftTable) {
+      if (predicate(leftRow, rightRow)) {
+        matched = true;
         break;
       }
-      printRow(joinedRow);
+    }
+    if (!matched) {
+      if (args_.kind == JoinKind::Right || args_.kind == JoinKind::Outer) {
+        printRightRow(rightRow, leftTable[0].size());
+      }
     }
   }
 }

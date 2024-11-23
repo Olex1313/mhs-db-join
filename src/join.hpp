@@ -3,6 +3,7 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace join {
 
@@ -43,14 +44,8 @@ public:
   virtual ~JoinExecutor() {}
 
 protected:
-  void passRow(std::vector<std::string> &&row);
-
-  void matchRow(const std::vector<std::string> &row);
-
-  void flushMatches();
-
-private:
-  bool predicate(const std::vector<std::string> &row) const;
+  bool predicate(const std::vector<std::string> &leftRow,
+                 const std::vector<std::string> &rightRow) const;
 
 protected:
   const Args args_;
@@ -65,9 +60,6 @@ public:
   void execute() override;
 
   ~NestedLoopExecutor() = default;
-
-private:
-  std::ifstream leftFile_;
 };
 
 class SortMergeExecutor : public JoinExecutor {
