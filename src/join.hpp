@@ -13,7 +13,8 @@ using Row = std::vector<std::string>;
 using Table = std::vector<Row>;
 // pair in value acts as a marker that row matched during join
 // FIXME there may be many rows for same key
-using HashedTable = std::unordered_map<std::string, std::pair<Row, bool>>;
+using HashedTable =
+    std::unordered_map<std::string, std::pair<std::vector<Row>, bool>>;
 
 enum class JoinKind { Left = 0, Right, Inner, Outer };
 
@@ -96,7 +97,7 @@ private:
   bool rightFileHashed() const;
 
   bool shouldAddUnmatchedToResults() const;
-  
+
   bool shouldCheckUnmatched() const;
 
 private:

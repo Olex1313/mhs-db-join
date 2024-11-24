@@ -1,5 +1,6 @@
 #include "join.hpp"
 
+#include <_types/_uintmax_t.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -7,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
 namespace join {
 
@@ -62,7 +64,13 @@ HashedTable readFileToTable(std::string_view filename, std::size_t keyIdx) {
     if (line.empty() || line.back() == ',') {
       row.push_back("");
     }
-    result.emplace(std::make_pair(row[keyIdx], std::make_pair(row, false)));
+    auto rowsWithKey = result.find(row[keyIdx]);
+    if (rowsWithKey == result.end()) {
+      result.emplace(std::make_pair(
+          row[keyIdx], std::make_pair(std::vector<Row>{row}, false)));
+    } else {
+      rowsWithKey->second.first.push_back(row);
+    }
   }
   return result;
 }
@@ -116,10 +124,10 @@ HashJoinExecutor::HashJoinExecutor(
 
   if (leftFileHashed()) {
     hashTable_ = readFileToTable(args.leftFilename, args.leftFieldIdx);
-    leftTableColumnsCount = hashTable_.begin()->second.first.size();
+    leftTableColumnsCount = hashTable_.begin()->second.first.cbegin()->size();
   } else {
     hashTable_ = readFileToTable(args.rightFilename, args.rigthFieldIdx);
-    rightTableColumnsCount = hashTable_.begin()->second.first.size();
+    rightTableColumnsCount = hashTable_.begin()->second.first.cbegin()->size();
   }
 }
 
@@ -166,13 +174,15 @@ void HashJoinExecutor::execute() {
 
     std::size_t keyIdx =
         leftFileHashed() ? args_.rigthFieldIdx : args_.leftFieldIdx;
-    auto matchingRow = hashTable_.find(row[keyIdx]);
+    auto rowsWithKey = hashTable_.find(row[keyIdx]);
 
-    if (matchingRow != hashTable_.end()) {
-      const Row &leftRow = leftFileHashed() ? matchingRow->second.first : row;
-      const Row &rightRow = rightFileHashed() ? matchingRow->second.first : row;
-      matchingRow->second.second = true;
-      printRows(leftRow, rightRow);
+    if (rowsWithKey != hashTable_.end()) {
+      for (const auto &matchedRow : rowsWithKey->second.first) {
+        const Row &leftRow = leftFileHashed() ? matchedRow : row;
+        const Row &rightRow = rightFileHashed() ? matchedRow : row;
+        rowsWithKey->second.second = true;
+        printRows(leftRow, rightRow);
+      }
     } else if (shouldAddUnmatchedToResults()) {
       const Row &leftRow =
           leftFileHashed() ? Row(leftTableColumnsCount, "") : row;
@@ -185,14 +195,17 @@ void HashJoinExecutor::execute() {
   // add leftovers
   if (shouldCheckUnmatched()) {
     for (const auto &entry : hashTable_) {
-      bool rowIsUnmatched = !entry.second.second;
-      if (rowIsUnmatched) {
-        const Row &leftRow = leftFileHashed() ? entry.second.first
-                                              : Row(leftTableColumnsCount, "");
-        const Row &rightRow = rightFileHashed()
-                                  ? entry.second.first
-                                  : Row(rightTableColumnsCount, "");
-        printRows(leftRow, rightRow);
+      bool rowsAreUnmatched = !entry.second.second;
+      if (rowsAreUnmatched) {
+        for (const auto &unmatchedRow : entry.second.first) {
+          const Row &leftRow = leftFileHashed()
+                                   ? unmatchedRow
+                                   : Row(leftTableColumnsCount, "");
+          const Row &rightRow = rightFileHashed()
+                                    ? unmatchedRow
+                                    : Row(rightTableColumnsCount, "");
+          printRows(leftRow, rightRow);
+        }
       }
     }
   }

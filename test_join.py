@@ -1,9 +1,12 @@
 import subprocess
 import csv
+from typing import Optional
 import pytest
 
 from tempfile import NamedTemporaryFile
 from dataclasses import dataclass
+
+JOIN_TYPES = ["inner", "left", "right", "outer"]
 
 
 def dump_csv(file, data: list[list[str]]):
@@ -21,6 +24,29 @@ class JoinTestcase:
     right_column: str
     join_type: str
     expected_out: list[list[str]]
+    test_id: Optional[str] = None
+
+    def __str__(self):
+        return self.test_id or self.join_type
+
+
+def multiple_matches_tc(join_type: str) -> JoinTestcase:
+    return JoinTestcase(
+        [["1", "Alice"]],
+        "1",
+        [["1", "25"], ["1", "25"], ["1", "30"]],
+        "1",
+        join_type,
+        [
+            ["1", "Alice", "1", "25"],
+            ["1", "Alice", "1", "25"],
+            ["1", "Alice", "1", "30"],
+        ],
+        test_id=f"multiple-matches-for-key-{join_type}",
+    )
+
+
+tc_with_multiple_matched = [multiple_matches_tc(join_type) for join_type in JOIN_TYPES]
 
 
 @pytest.mark.parametrize("algorithm", ["nested", "hash"])
@@ -35,6 +61,7 @@ class JoinTestcase:
             "inner",
             [["1", "Alice", "1", "25"], ["2", "Bob", "2", "30"]],
         ),
+        *tc_with_multiple_matched,
         JoinTestcase(
             [["1", "Alice"], ["2", "Bob"], ["3", "Charlie"]],
             "1",
@@ -64,6 +91,7 @@ class JoinTestcase:
             [["1", "Alice", "", ""], ["2", "Bob", "2", "30"], ["", "", "3", "40"]],
         ),
     ],
+    ids=str,
 )
 def test_join(algorithm: str, testcase: JoinTestcase):
 
