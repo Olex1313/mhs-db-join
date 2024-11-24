@@ -61,7 +61,6 @@ tc_with_multiple_matched = [multiple_matches_tc(join_type) for join_type in JOIN
             "inner",
             [["1", "Alice", "1", "25"], ["2", "Bob", "2", "30"]],
         ),
-        *tc_with_multiple_matched,
         JoinTestcase(
             [["1", "Alice"], ["2", "Bob"], ["3", "Charlie"]],
             "1",
@@ -90,6 +89,7 @@ tc_with_multiple_matched = [multiple_matches_tc(join_type) for join_type in JOIN
             "outer",
             [["1", "Alice", "", ""], ["2", "Bob", "2", "30"], ["", "", "3", "40"]],
         ),
+        *tc_with_multiple_matched,
     ],
     ids=str,
 )
