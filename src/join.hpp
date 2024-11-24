@@ -9,8 +9,11 @@ namespace join {
 
 const uintmax_t kMaxRuntimeMemory = 1024 * 1024 * 1024 * 4ull;
 
-using Table = std::vector<std::vector<std::string>>;
 using Row = std::vector<std::string>;
+using Table = std::vector<Row>;
+// pair in value acts as a marker that row matched during join
+// FIXME there may be many rows for same key
+using HashedTable = std::unordered_map<std::string, std::pair<Row, bool>>;
 
 enum class JoinKind { Left = 0, Right, Inner, Outer };
 
@@ -21,6 +24,14 @@ static const std::unordered_map<std::string, JoinKind> kindMap = {
     {"outer", JoinKind::Outer},
 };
 
+enum class JoinAlgo { Nested = 0, Hash, SortMerge };
+
+static const std::unordered_map<std::string, JoinAlgo> algoMap = {
+    {"nested", JoinAlgo::Nested},
+    {"hash", JoinAlgo::Hash},
+    {"sort-merge", JoinAlgo::SortMerge},
+};
+
 struct Args {
   std::string_view leftFilename;
   std::size_t leftFieldIdx;
@@ -29,6 +40,7 @@ struct Args {
   std::size_t rigthFieldIdx;
 
   JoinKind kind;
+  std::optional<JoinAlgo> algorithm;
 };
 
 struct FileMetadata {
@@ -47,8 +59,7 @@ public:
   virtual ~JoinExecutor() {}
 
 protected:
-  bool predicate(const Row &leftRow,
-                 const Row &rightRow) const;
+  bool predicate(const Row &leftRow, const Row &rightRow) const;
 
 protected:
   const Args args_;
@@ -74,19 +85,27 @@ public:
 
 class HashJoinExecutor : public JoinExecutor {
 public:
-  HashJoinExecutor(const Args &args, const FileMetadata &filesMeta);
+  HashJoinExecutor(const Args &args,
+                   const std::pair<FileMetadata, FileMetadata> &filesMeta);
 
   void execute() override;
 
 private:
-  std::ifstream leftFile_;
-  std::ifstream rightFile_;
-  std::map<std::string, std::string> hashTable_;
+  bool leftFileHashed() const;
+
+  bool rightFileHashed() const;
+
+  bool shouldAddUnmatchedToResults() const;
+
+private:
+  std::size_t leftTableColumnsCount;
+  std::size_t rightTableColumnsCount;
+  const std::pair<FileMetadata, FileMetadata> filesMeta_;
+  HashedTable hashTable_;
 };
 
-std::unique_ptr<JoinExecutor> decideOnExecutor(const FileMetadata &first,
-                                               const FileMetadata &second,
-                                               const Args &args);
+JoinAlgo decideOnExecutor(const FileMetadata &first, const FileMetadata &second,
+                          const Args &args);
 
 void performJoin(const Args &args);
 

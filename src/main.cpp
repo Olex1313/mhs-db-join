@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[]) {
   try {
-    if (argc != 6) {
+    if (argc < 6) {
       throw std::invalid_argument("Invalid number of arguments: " +
                                   std::to_string(argc));
     }
@@ -18,6 +18,11 @@ int main(int argc, char *argv[]) {
         .rigthFieldIdx = std::stoul(argv[4]) - 1,
         .kind = join::kindMap.at(argv[5]),
     };
+
+    // NOTE force join algorithm for testing purposes
+    if (argc == 7) {
+      joinArgs.algorithm = join::algoMap.at(argv[6]);
+    }
 
     join::performJoin(joinArgs);
 

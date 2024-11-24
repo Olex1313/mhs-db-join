@@ -1,0 +1,9 @@
+env
+__pycache__
+.cache
+.pytest*
+CMakeFiles
+.vscode
+compile_commands.json
+cmake_install.*
+CMakeCache*

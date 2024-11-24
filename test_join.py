@@ -3,6 +3,7 @@ import csv
 import pytest
 
 from tempfile import NamedTemporaryFile
+from dataclasses import dataclass
 
 
 def dump_csv(file, data: list[list[str]]):
@@ -12,22 +13,33 @@ def dump_csv(file, data: list[list[str]]):
     file.flush()
 
 
+@dataclass
+class JoinTestcase:
+    left_table: str
+    left_column: str
+    right_table: str
+    right_column: str
+    join_type: str
+    expected_out: list[list[str]]
+
+
+@pytest.mark.parametrize("algorithm", ["nested", "hash"])
 @pytest.mark.parametrize(
-    "left_table, left_column, right_table, right_column, join_type, expected_output",
+    "testcase",
     [
-        (
+        JoinTestcase(
             [["1", "Alice"], ["2", "Bob"], ["3", "Charlie"]],
-            1,
+            "1",
             [["1", "25"], ["2", "30"], ["4", "40"]],
-            1,
+            "1",
             "inner",
             [["1", "Alice", "1", "25"], ["2", "Bob", "2", "30"]],
         ),
-        (
+        JoinTestcase(
             [["1", "Alice"], ["2", "Bob"], ["3", "Charlie"]],
-            1,
+            "1",
             [["1", "25"], ["2", "30"], ["4", "40"]],
-            1,
+            "1",
             "left",
             [
                 ["1", "Alice", "1", "25"],
@@ -35,47 +47,41 @@ def dump_csv(file, data: list[list[str]]):
                 ["3", "Charlie", "", ""],
             ],
         ),
-        (
+        JoinTestcase(
             [["1", "Alice"], ["2", "Bob"]],
-            1,
+            "1",
             [["1", "25"], ["2", "30"], ["3", "50"]],
-            1,
+            "1",
             "right",
             [["1", "Alice", "1", "25"], ["2", "Bob", "2", "30"], ["", "", "3", "50"]],
         ),
-        (
+        JoinTestcase(
             [["1", "Alice"], ["2", "Bob"]],
-            1,
+            "1",
             [["2", "30"], ["3", "40"]],
-            1,
+            "1",
             "outer",
             [["1", "Alice", "", ""], ["2", "Bob", "2", "30"], ["", "", "3", "40"]],
         ),
     ],
 )
-def test_join(
-    left_table,
-    left_column,
-    right_table,
-    right_column,
-    join_type,
-    expected_output,
-):
+def test_join(algorithm: str, testcase: JoinTestcase):
 
     with NamedTemporaryFile(mode="w") as left_file, NamedTemporaryFile(
         mode="w"
     ) as right_file:
-        dump_csv(left_file, left_table)
-        dump_csv(right_file, right_table)
+        dump_csv(left_file, testcase.left_table)
+        dump_csv(right_file, testcase.right_table)
 
         join_run = subprocess.run(
             [
                 "./join",
                 left_file.name,
-                str(left_column),
+                testcase.left_column,
                 right_file.name,
-                str(right_column),
-                join_type,
+                testcase.right_column,
+                testcase.join_type,
+                algorithm,
             ],
             capture_output=True,
         )
@@ -87,5 +93,5 @@ def test_join(
         resulting_entries = [row.split(",") for row in text_res.splitlines()]
 
         assert (
-            resulting_entries == expected_output
+            resulting_entries == testcase.expected_out
         ), f"Unexpected output: {resulting_entries}"
