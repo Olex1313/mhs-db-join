@@ -111,14 +111,15 @@ void NestedLoopExecutor::execute() {
 
 HashJoinExecutor::HashJoinExecutor(
     const Args &args, const std::pair<FileMetadata, FileMetadata> &filesMeta)
-    : JoinExecutor(args), filesMeta_(filesMeta), hashTable_(leftFileHashed()) {
+    : JoinExecutor(args), leftTableColumnsCount(0), rightTableColumnsCount(0),
+      filesMeta_(filesMeta), hashTable_(leftFileHashed()) {
 
   if (leftFileHashed()) {
     hashTable_ = readFileToTable(args.leftFilename, args.leftFieldIdx);
-    leftTableColumnsCount = hashTable_.begin()->second.first[0].size();
+    leftTableColumnsCount = hashTable_.begin()->second.first.size();
   } else {
     hashTable_ = readFileToTable(args.rightFilename, args.rigthFieldIdx);
-    rightTableColumnsCount = hashTable_.begin()->second.first[0].size();
+    rightTableColumnsCount = hashTable_.begin()->second.first.size();
   }
 }
 
@@ -132,6 +133,12 @@ bool HashJoinExecutor::shouldAddUnmatchedToResults() const {
   return args_.kind == JoinKind::Outer ||
          (args_.kind == JoinKind::Right && leftFileHashed()) ||
          (args_.kind == JoinKind::Left && rightFileHashed());
+}
+
+bool HashJoinExecutor::shouldCheckUnmatched() const {
+  return args_.kind == JoinKind::Outer ||
+         (args_.kind == JoinKind::Left && leftFileHashed()) ||
+         (args_.kind == JoinKind::Right && rightFileHashed());
 }
 
 void HashJoinExecutor::execute() {
@@ -176,13 +183,13 @@ void HashJoinExecutor::execute() {
   }
 
   // add leftovers
-  if (args_.kind != JoinKind::Inner) {
+  if (shouldCheckUnmatched()) {
     for (const auto &entry : hashTable_) {
-      if (!entry.second.second) { // didn't match row on first step
-        const Row &leftRow = leftFileHashed() && args_.kind == JoinKind::Left
-                                 ? entry.second.first
-                                 : Row(leftTableColumnsCount, "");
-        const Row &rightRow = rightFileHashed() && args_.kind == JoinKind::Right
+      bool rowIsUnmatched = !entry.second.second;
+      if (rowIsUnmatched) {
+        const Row &leftRow = leftFileHashed() ? entry.second.first
+                                              : Row(leftTableColumnsCount, "");
+        const Row &rightRow = rightFileHashed()
                                   ? entry.second.first
                                   : Row(rightTableColumnsCount, "");
         printRows(leftRow, rightRow);

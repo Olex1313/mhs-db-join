@@ -96,6 +96,8 @@ private:
   bool rightFileHashed() const;
 
   bool shouldAddUnmatchedToResults() const;
+  
+  bool shouldCheckUnmatched() const;
 
 private:
   std::size_t leftTableColumnsCount;
