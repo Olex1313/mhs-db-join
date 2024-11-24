@@ -1,5 +1,6 @@
 import subprocess
 import csv
+import pytest
 
 from tempfile import NamedTemporaryFile
 
@@ -11,14 +12,55 @@ def dump_csv(file, data: list[list[str]]):
     file.flush()
 
 
-def test_join_small_files():
-    left_table = [["1", "1", ""], ["2", "6", ""], ["3", "7", ""]]
-    right_table = [["1", "2", "3"], ["2", "6", ""], ["3", "7", ""]]
-    expected_set = [
-        ["1", "1", "", "1", "2", "3"],
-        ["2", "6", "", "2", "6", ""],
-        ["3", "7", "", "3", "7", ""],
-    ]
+@pytest.mark.parametrize(
+    "left_table, left_column, right_table, right_column, join_type, expected_output",
+    [
+        (
+            [["1", "Alice"], ["2", "Bob"], ["3", "Charlie"]],
+            1,
+            [["1", "25"], ["2", "30"], ["4", "40"]],
+            1,
+            "inner",
+            [["1", "Alice", "1", "25"], ["2", "Bob", "2", "30"]],
+        ),
+        (
+            [["1", "Alice"], ["2", "Bob"], ["3", "Charlie"]],
+            1,
+            [["1", "25"], ["2", "30"], ["4", "40"]],
+            1,
+            "left",
+            [
+                ["1", "Alice", "1", "25"],
+                ["2", "Bob", "2", "30"],
+                ["3", "Charlie", "", ""],
+            ],
+        ),
+        (
+            [["1", "Alice"], ["2", "Bob"]],
+            1,
+            [["1", "25"], ["2", "30"], ["3", "50"]],
+            1,
+            "right",
+            [["1", "Alice", "1", "25"], ["2", "Bob", "2", "30"], ["", "", "3", "50"]],
+        ),
+        (
+            [["1", "Alice"], ["2", "Bob"]],
+            1,
+            [["2", "30"], ["3", "40"]],
+            1,
+            "outer",
+            [["1", "Alice", "", ""], ["2", "Bob", "2", "30"], ["", "", "3", "40"]],
+        ),
+    ],
+)
+def test_join(
+    left_table,
+    left_column,
+    right_table,
+    right_column,
+    join_type,
+    expected_output,
+):
 
     with NamedTemporaryFile(mode="w") as left_file, NamedTemporaryFile(
         mode="w"
@@ -27,10 +69,23 @@ def test_join_small_files():
         dump_csv(right_file, right_table)
 
         join_run = subprocess.run(
-            ["./join", left_file.name, "1", right_file.name, "1", "inner"],
+            [
+                "./join",
+                left_file.name,
+                str(left_column),
+                right_file.name,
+                str(right_column),
+                join_type,
+            ],
             capture_output=True,
         )
 
-        text_res = join_run.stdout.decode("ascii")
+        assert join_run.returncode == 0, f"Error: {join_run.stderr}"
+        text_res = (
+            join_run.stdout.decode("utf-8").replace("\r\n", "\n").replace("\r", "")
+        )
         resulting_entries = [row.split(",") for row in text_res.splitlines()]
-        assert resulting_entries == expected_set
+
+        assert (
+            resulting_entries == expected_output
+        ), f"Unexpected output: {resulting_entries}"

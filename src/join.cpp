@@ -8,8 +8,7 @@
 
 namespace join {
 
-void printRows(const std::vector<std::string> &leftRow,
-               const std::vector<std::string> &rightRow) {
+void printRows(const Row &leftRow, const Row &rightRow) {
   for (const auto &cell : leftRow) {
     std::cout << cell << ",";
   }
@@ -19,35 +18,35 @@ void printRows(const std::vector<std::string> &leftRow,
   std::cout << rightRow[rightRow.size() - 1] << "\n";
 }
 
-void printLeftRow(const std::vector<std::string> &leftRow,
-                  std::size_t rightRowColumnsCount) {
-  printRows(leftRow, std::vector<std::string>(rightRowColumnsCount, ""));
+void printLeftRow(const Row &leftRow, std::size_t rightRowColumnsCount) {
+  printRows(leftRow, Row(rightRowColumnsCount, ""));
 }
 
-void printRightRow(const std::vector<std::string> &rightRow,
-                   std::size_t leftRowColumnsCount) {
+void printRightRow(const Row &rightRow, std::size_t leftRowColumnsCount) {
 
-  printRows(std::vector<std::string>(leftRowColumnsCount, ""), rightRow);
+  printRows(Row(leftRowColumnsCount, ""), rightRow);
 }
 
-std::vector<std::vector<std::string>> readFile(std::string_view filename) {
+Table readFile(std::string_view filename) {
   std::ifstream file(filename);
-  std::vector<std::vector<std::string>> result;
+  Table result;
   std::string line;
   while (std::getline(file, line)) {
     std::stringstream ss(line);
     std::string cell;
-    std::vector<std::string> row;
+    Row row;
     while (std::getline(ss, cell, ',')) {
       row.push_back(cell);
+    }
+    if (line.empty() || line.back() == ',') {
+      row.push_back("");
     }
     result.push_back(row);
   }
   return result;
 }
 
-bool JoinExecutor::predicate(const std::vector<std::string> &leftRow,
-                             const std::vector<std::string> &rightRow) const {
+bool JoinExecutor::predicate(const Row &leftRow, const Row &rightRow) const {
   return leftRow[args_.leftFieldIdx] == rightRow[args_.rigthFieldIdx];
 }
 
@@ -88,6 +87,8 @@ void NestedLoopExecutor::execute() {
     }
   }
 }
+
+void HashJoinExecutor::execute() {}
 
 void performJoin(const Args &args) {
   auto leftFileMetadata =

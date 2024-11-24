@@ -9,6 +9,9 @@ namespace join {
 
 const uintmax_t kMaxRuntimeMemory = 1024 * 1024 * 1024 * 4ull;
 
+using Table = std::vector<std::vector<std::string>>;
+using Row = std::vector<std::string>;
+
 enum class JoinKind { Left = 0, Right, Inner, Outer };
 
 static const std::unordered_map<std::string, JoinKind> kindMap = {
@@ -44,13 +47,13 @@ public:
   virtual ~JoinExecutor() {}
 
 protected:
-  bool predicate(const std::vector<std::string> &leftRow,
-                 const std::vector<std::string> &rightRow) const;
+  bool predicate(const Row &leftRow,
+                 const Row &rightRow) const;
 
 protected:
   const Args args_;
   bool matched_;
-  std::vector<std::string> currentRow_;
+  Row currentRow_;
 };
 
 class NestedLoopExecutor : public JoinExecutor {

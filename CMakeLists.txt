@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 3.8)
 project(join)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra-semi -g -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
 
