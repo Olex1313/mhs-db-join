@@ -15,6 +15,8 @@ using Table = std::vector<Row>;
 // FIXME there may be many rows for same key
 using HashedTable =
     std::unordered_map<std::string, std::pair<std::vector<Row>, bool>>;
+    
+using RowComparator = std::function<bool(const Row &, const Row &)>;
 
 enum class JoinKind { Left = 0, Right, Inner, Outer };
 
@@ -38,7 +40,7 @@ struct Args {
   std::size_t leftFieldIdx;
 
   std::string_view rightFilename;
-  std::size_t rigthFieldIdx;
+  std::size_t rightFieldIdx;
 
   JoinKind kind;
   std::optional<JoinAlgo> algorithm;
@@ -60,7 +62,7 @@ public:
   virtual ~JoinExecutor() {}
 
 protected:
-  bool predicate(const Row &leftRow, const Row &rightRow) const;
+  int predicate(const Row &leftRow, const Row &rightRow) const;
 
 protected:
   const Args args_;
@@ -79,9 +81,15 @@ public:
 
 class SortMergeExecutor : public JoinExecutor {
 public:
-  SortMergeExecutor(const Args &args);
+  SortMergeExecutor(const Args &args,
+                    const std::pair<FileMetadata, FileMetadata> &filesMeta);
 
   void execute() override;
+
+private:
+  const std::pair<FileMetadata, FileMetadata> filesMeta_;
+  std::string sortedLeftFilename;
+  std::string sortedRightFilename;
 };
 
 class HashJoinExecutor : public JoinExecutor {

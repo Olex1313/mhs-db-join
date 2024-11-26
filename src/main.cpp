@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
         .leftFilename = argv[1],
         .leftFieldIdx = std::stoul(argv[2]) - 1,
         .rightFilename = argv[3],
-        .rigthFieldIdx = std::stoul(argv[4]) - 1,
+        .rightFieldIdx = std::stoul(argv[4]) - 1,
         .kind = join::kindMap.at(argv[5]),
     };
 

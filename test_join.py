@@ -49,7 +49,7 @@ def multiple_matches_tc(join_type: str) -> JoinTestcase:
 tc_with_multiple_matched = [multiple_matches_tc(join_type) for join_type in JOIN_TYPES]
 
 
-@pytest.mark.parametrize("algorithm", ["nested", "hash"])
+@pytest.mark.parametrize("algorithm", ["nested", "hash", "sort-merge"])
 @pytest.mark.parametrize(
     "testcase",
     [
