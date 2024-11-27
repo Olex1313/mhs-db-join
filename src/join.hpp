@@ -7,7 +7,10 @@
 
 namespace join {
 
-const uintmax_t kMaxRuntimeMemory = 1024 * 1024 * 1024 * 4ull;
+const uintmax_t kKilobyte = 1024;
+const uintmax_t kMegabyte = kKilobyte * 1024;
+const uintmax_t kGigabyte = kMegabyte * 1024;
+const uintmax_t kMaxRuntimeMemory = kGigabyte * 4ull;
 
 using Row = std::vector<std::string>;
 using Table = std::vector<Row>;
@@ -15,7 +18,7 @@ using Table = std::vector<Row>;
 // FIXME there may be many rows for same key
 using HashedTable =
     std::unordered_map<std::string, std::pair<std::vector<Row>, bool>>;
-    
+
 using RowComparator = std::function<bool(const Row &, const Row &)>;
 
 enum class JoinKind { Left = 0, Right, Inner, Outer };
@@ -50,7 +53,6 @@ struct FileMetadata {
   std::string_view filename;
   std::size_t joinFieldIdx;
   std::uintmax_t fileSize;
-  std::uintmax_t rowsCount; // is it needed?
 };
 
 class JoinExecutor {
@@ -85,6 +87,8 @@ public:
                     const std::pair<FileMetadata, FileMetadata> &filesMeta);
 
   void execute() override;
+
+  ~SortMergeExecutor();
 
 private:
   const std::pair<FileMetadata, FileMetadata> filesMeta_;

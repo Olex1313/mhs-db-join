@@ -1,8 +1,8 @@
 #include "join.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <ios>
 #include <iostream>
@@ -244,7 +244,7 @@ void NestedLoopExecutor::execute() {
 HashJoinExecutor::HashJoinExecutor(
     const Args &args, const std::pair<FileMetadata, FileMetadata> &filesMeta)
     : JoinExecutor(args), leftTableColumnsCount(0), rightTableColumnsCount(0),
-      filesMeta_(filesMeta), hashTable_(leftFileHashed()) {
+      filesMeta_(filesMeta), hashTable_() {
 
   if (leftFileHashed()) {
     hashTable_ = readFileToTable(args.leftFilename, args.leftFieldIdx);
@@ -340,12 +340,12 @@ SortMergeExecutor::SortMergeExecutor(
       sortedLeftFilename(std::string(args.leftFilename) + ".sorted"),
       sortedRightFilename(std::string(args.rightFilename) + ".sorted") {
 
-  externalMemoryMergeSort(args.leftFilename, sortedLeftFilename, 10ull,
+  externalMemoryMergeSort(args.leftFilename, sortedLeftFilename, kMegabyte,
                           [&](const Row &left, const Row &right) {
                             return left[args_.leftFieldIdx] <
                                    right[args_.leftFieldIdx];
                           });
-  externalMemoryMergeSort(args.rightFilename, sortedRightFilename, 10ull,
+  externalMemoryMergeSort(args.rightFilename, sortedRightFilename, kMegabyte,
                           [&](const Row &left, const Row &right) {
                             return left[args_.rightFieldIdx] <
                                    right[args_.rightFieldIdx];
@@ -435,6 +435,11 @@ void SortMergeExecutor::execute() {
   }
 }
 
+SortMergeExecutor::~SortMergeExecutor() {
+  std::filesystem::remove_all(sortedLeftFilename);
+  std::filesystem::remove_all(sortedRightFilename);
+}
+
 void performJoin(const Args &args) {
   auto leftFileMetadata =
       FileMetadata{.filename = args.leftFilename,
@@ -468,6 +473,18 @@ void performJoin(const Args &args) {
 JoinAlgo decideOnExecutor(const FileMetadata &first, const FileMetadata &second,
                           const Args &args) {
 
-  return JoinAlgo::Nested;
+  // NOTE: it is assumed that the program overhead is around 512MB
+  constexpr std::uintmax_t maxRuntimeSize = kMaxRuntimeMemory - kGigabyte / 2;
+
+  // its better to take more ram, but compute faster
+  if (first.fileSize + second.fileSize < kMegabyte) {
+    return JoinAlgo::Nested;
+  }
+
+  if (first.fileSize < maxRuntimeSize || second.fileSize < maxRuntimeSize) {
+    return JoinAlgo::Hash;
+  }
+
+  return JoinAlgo::SortMerge;
 }
 } // namespace join
